@@ -1,0 +1,16 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Python
+__pycache/
+*.pyc
+
+# Configuracoes locais
+.vscode/
+
+# Dados gerados
+data/bronze/*
+!data/bronze/.gitkeep
+data/source/*
+!data/source/.gitkeep
