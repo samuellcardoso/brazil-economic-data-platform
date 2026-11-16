@@ -9,18 +9,12 @@ __pycache/
 # Configuracoes locais
 .vscode/
 
-# Dados gerados
-data/bronze/
-
-# Manter estrutura das pastas
-!data/bronze/
-!data/bronze/indicadores_complementares/
-!data/bronze/ipca/
-!data/bronze/selic/
-
-# Dados de origem
-!data/source/
+# Manter pastas
+!data/**/.gitkeep
 
 # Ignorar dados gerados na Bronze
 data/bronze/**/*.csv
 data/bronze/**/*.json
+
+# Ignorar dados gerados na Silver
+data/silver/**/*.parquet

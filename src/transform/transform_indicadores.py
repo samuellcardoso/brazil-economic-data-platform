@@ -1,8 +1,10 @@
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 BRONZE_DIR = BASE_DIR / 'data' / 'bronze'
+SILVER_DIR = BASE_DIR / 'data' / 'silver'
 INDICADOR_DIR = BASE_DIR / 'data' / 'source'
 
 def ler_dados(nome: str, caminho: Path) -> pd.DataFrame:
@@ -79,9 +81,27 @@ def juntar_dados(nome, df, indicador) -> pd.DataFrame:
 
     return dados_juntos
 
-def salvar_dados():
-    pass
+def salvar_dados(nome, df):
+    pasta_destino = SILVER_DIR / nome
+    pasta_destino.mkdir(parents=True, exist_ok=True)
     
+    if df.empty:
+        raise ValueError('Arquivo esta vazio')
+    
+    hoje = datetime.now()
+    nome_arquivo = pasta_destino / f'{nome}_{hoje.strftime("%Y%m%d")}.parquet'
+
+    df.to_parquet(nome_arquivo, engine='pyarrow')
+    
+    print(f'Arquivo salvo em: {nome_arquivo}')
+    
+    df_parquet = pd.read_parquet(nome_arquivo, engine='pyarrow')
+    
+    print(f'[{nome.upper()}] - Dados originais - {df.shape[0]} registros | {df.shape[1]} colunas')    
+    print(f'[{nome.upper()}] - Dados em Parquet - {df_parquet.shape[0]} registros | {df_parquet.shape[1]} colunas')
+    
+    return df_parquet
+
 arquivos = {
     'selic': 'selic_20261112.json',
     'ipca': 'ipca_20261112.json'
@@ -103,3 +123,10 @@ dfs_merge = {
     nome: juntar_dados(nome, df, indicador)
     for nome, df in dfs_silver.items()
 }
+
+dados_salvos = {
+    nome: salvar_dados(nome, df)
+    for nome, df in dfs_merge.items()
+}
+
+print(dados_salvos)
