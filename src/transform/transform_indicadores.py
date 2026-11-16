@@ -8,22 +8,27 @@ SILVER_DIR = BASE_DIR / 'data' / 'silver'
 INDICADOR_DIR = BASE_DIR / 'data' / 'source'
 
 def ler_dados(nome: str, caminho: Path) -> pd.DataFrame:
-    df = pd.read_json(caminho, encoding='utf-8') 
+    try:
+        df = pd.read_json(caminho, encoding='utf-8') 
 
-    print(f'=== {nome.upper()} ===')
-    print(df.head())
-    print(f'[{nome.upper()}] - {df.shape[0]} registros | {df.shape[1]} colunas')
-    print(df.dtypes)
-    print('Valores nulos:\n', df.isnull().sum())
-    print('Linhas duplicadas:', df.duplicated().sum())
-    print('Datas duplicadas:', df.duplicated(subset=['data']).sum())
+        print(f'=== {nome.upper()} ===')
+        print(df.head())
+        print(f'[{nome.upper()}] - {df.shape[0]} registros | {df.shape[1]} colunas')
+        print(df.dtypes)
+        print('Valores nulos:\n', df.isnull().sum())
+        print('Linhas duplicadas:', df.duplicated().sum())
+        print('Datas duplicadas:', df.duplicated(subset=['data']).sum())
 
-    return df
+        return df
+    
+    except Exception as e:
+        print(f'Erro, dados invalidos para leitura: {e}')
+        raise
     
 def tratar_dados(nome: str, df: pd.DataFrame) -> pd.DataFrame:
     try:
         if df.empty:
-            raise ValueError('Arquivo nao existe')
+            raise ValueError('Arquivo esta vazio')
         
         df = df.copy()
         
@@ -38,7 +43,7 @@ def tratar_dados(nome: str, df: pd.DataFrame) -> pd.DataFrame:
         df = df.drop_duplicates()
 
         if df['data'].duplicated().any():
-            raise ValueError(f'Existem datas duplicadas em {nome}')
+            raise ValueError(f'Datas duplicadas encontradas em {nome}')
 
         if df['data'].isnull().any():
             raise ValueError(f'Datas invalidas encontradas em {nome}')
@@ -54,53 +59,65 @@ def tratar_dados(nome: str, df: pd.DataFrame) -> pd.DataFrame:
         print(f'Erro, dados invalidos para tratamento: {e}')
         raise
     
-def juntar_dados(nome, df, indicador) -> pd.DataFrame:
-    if indicador.empty:
-        raise ValueError('Arquivo esta vazio')
-    
-    colunas_obrigatorias = ['indicador', 'categoria', 'unidade']
-    if not all(coluna in indicador.columns for coluna in colunas_obrigatorias):
-        raise ValueError('Coluna obrigatoria ausente')
-    
-    if indicador.duplicated(subset=['indicador']).any():
-        raise ValueError(f'Dados duplicados em {indicador}')
-    
-    if indicador.isnull().any().any():
-        raise ValueError(f'Valores nulos em {indicador}')
-    
-    dados_juntos = pd.merge(df, indicador, how='left', on='indicador', validate='many_to_one')
-    
-    print(f'[{nome.upper()}] - Dados originais - {df.shape[0]} registros | {df.shape[1]} colunas')
-    print(f'[{nome.upper()}] - Dados transformados - {dados_juntos.shape[0]} registros | {dados_juntos.shape[1]} colunas')
-    
-    if not df.shape[0] == dados_juntos.shape[0]:
-        raise ValueError(f'Quantidade de linhas nao foi mantida: {df.shape[0]} | {dados_juntos.shape[0]}')
-    
-    if dados_juntos['categoria'].isnull().any() or dados_juntos['unidade'].isnull().any():
-        raise ValueError(f'Existe registros sem dados em {nome}')
+def juntar_dados(nome: str, df: pd.DataFrame, indicador: pd.DataFrame) -> pd.DataFrame:
+    try:
+        if indicador.empty:
+            raise ValueError('Arquivo esta vazio')
+        
+        colunas_obrigatorias = ['indicador', 'categoria', 'unidade']
+        if not all(coluna in indicador.columns for coluna in colunas_obrigatorias):
+            raise ValueError('Coluna obrigatoria ausente')
+        
+        if indicador.duplicated(subset=['indicador']).any():
+            raise ValueError(f'Dados duplicados na coluna indicador')
+        
+        if indicador.isnull().any().any():
+            raise ValueError(f'Valores nulos em {indicador}')
+        
+        dados_juntos = pd.merge(df, indicador, how='left', on='indicador', validate='many_to_one')
+        
+        print(f'[{nome.upper()}] - Dados originais - {df.shape[0]} registros | {df.shape[1]} colunas')
+        print(f'[{nome.upper()}] - Dados transformados - {dados_juntos.shape[0]} registros | {dados_juntos.shape[1]} colunas')
+        
+        if not df.shape[0] == dados_juntos.shape[0]:
+            raise ValueError(f'Quantidade de linhas nao foi mantida: {df.shape[0]} | {dados_juntos.shape[0]}')
+        
+        if dados_juntos['categoria'].isnull().any() or dados_juntos['unidade'].isnull().any():
+            raise ValueError(f'Existe registros sem dados em {nome}')
 
-    return dados_juntos
+        return dados_juntos
+    
+    except Exception as e:
+        print(f'Erro, dados invalidos para juncao: {e}')
+        raise
 
-def salvar_dados(nome, df):
-    pasta_destino = SILVER_DIR / nome
-    pasta_destino.mkdir(parents=True, exist_ok=True)
-    
-    if df.empty:
-        raise ValueError('Arquivo esta vazio')
-    
-    hoje = datetime.now()
-    nome_arquivo = pasta_destino / f'{nome}_{hoje.strftime("%Y%m%d")}.parquet'
+def salvar_dados(nome: str, df: pd.DataFrame) -> Path:
+    try:
+        if df.empty:
+            raise ValueError('Arquivo esta vazio')
 
-    df.to_parquet(nome_arquivo, engine='pyarrow')
+        pasta_destino = SILVER_DIR / nome
+        pasta_destino.mkdir(parents=True, exist_ok=True)
+        
+        hoje = datetime.now()
+        nome_arquivo = pasta_destino / f'{nome}_{hoje.strftime("%Y%m%d")}.parquet'
+
+        df.to_parquet(nome_arquivo, engine='pyarrow')
+        
+        print(f'Arquivo salvo em: {nome_arquivo}')
+        
+        df_parquet = pd.read_parquet(nome_arquivo, engine='pyarrow')
+        
+        pd.testing.assert_frame_equal(left=df, right=df_parquet)
+        
+        print(f'[{nome.upper()}] - Dados originais - {df.shape[0]} registros | {df.shape[1]} colunas')    
+        print(f'[{nome.upper()}] - Dados em Parquet - {df_parquet.shape[0]} registros | {df_parquet.shape[1]} colunas')
+        
+        return nome_arquivo
     
-    print(f'Arquivo salvo em: {nome_arquivo}')
-    
-    df_parquet = pd.read_parquet(nome_arquivo, engine='pyarrow')
-    
-    print(f'[{nome.upper()}] - Dados originais - {df.shape[0]} registros | {df.shape[1]} colunas')    
-    print(f'[{nome.upper()}] - Dados em Parquet - {df_parquet.shape[0]} registros | {df_parquet.shape[1]} colunas')
-    
-    return df_parquet
+    except Exception as e:
+        print(f'Erro, dados invalidos para salvamento: {e}')
+        raise
 
 arquivos = {
     'selic': 'selic_20261112.json',
